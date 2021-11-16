@@ -1,1 +1,1 @@
-# salsa-nft
+# SALSA NFTs
