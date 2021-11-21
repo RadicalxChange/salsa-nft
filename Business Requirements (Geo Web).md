@@ -1,0 +1,67 @@
+# Partial Common Ownership NFTs
+
+## High-Level Business Requirements (Geo Web Draft)
+
+- License
+  - The license is the core of the unique digital asset subject to ownership/control.
+  - Ideally the license represented in a PCO NFT should be compatible with existing NFT standards (i.e., ERC-721, ERC-998, or ERC-1155)
+  - The license should have a mechanism for linking to metadata that defines the unique attributes of the NFT. This could be an image, text file, definition of a land parcel, or any other arbitrary data.
+  - The license should be owned by a single blockchain address.
+  - The owner of the license should always be modifiable by an administrative smart contract/function to execute the necessary market operations.
+- Partial common ownership market requirements
+  - For each individual PCO NFT, its financial attributes are defined by the formula `Fee Rate * Self-Assessed Value = Contribution Rate`
+    - The fee rate can be global or different per NFT
+      - It is assumed that the fee rate should be modifiable, so should be a stored variable
+    - Therefore to retain the complete information, we need to store one of the other two values, but not both.
+  - If the fee rate changes, then one of the other two values must change for the equation to remain balanced.
+    - To avoid an unnecessary smart contract migration/update, the value that is assumed to be fixed should be the value that we store in the smart contract.
+      - The underlying economic rationale for partial common ownership is that a licensor is willing to pay an ongoing contribution rate up to the marginal utility that they gain from controlling the NFT. Because a rate change wouldn&#39;t impact the marginal utility of a NFT, it would seem that storing/fixing the Contribution Rate would be the right choice.
+        - Note: This does mean a rate change would immediately and inversely affect the value of the PCO economy (i.e., rate increase decreases the value, rate decrease increases the value). This makes sense, but reaching a new equilibrium after a fundamental economic change in most markets usually takes time.
+      - In practice, users may not think through this rationale and &quot;intuitively&quot; expect the Self-Assessed Value to remain fixed. Unless this intuition is so strong that it cannot be overcome with education/messaging, it shouldn&#39;t drive a suboptimal technical decision
+- Fee collection &amp; accounting
+  - Partial common ownership rules must be written and enforced entirely in a smart contract.
+    - It must accept payment of PCO fees, record initial and/or ongoing payments, and account for the reduction of the deposit over time
+  - The upfront deposit of PCO fees currently is more practical given smart contract limitations and costs.
+    - On the Geo Web, we do this by updating a license expiration date with each change to a self-assessed value and/or PCO fee deposit
+      - The outstanding deposit balance can be inferred from the expiration date, contribution rate, and current datetime
+  - The beneficiary of a PCO needs the ability to withdraw all or some of the earned PCO fees.
+  - The deposit of PCO fees can be set up as a refundable or non-refundable
+    - If non-refundable, deposited fees can only be exhausted through the passage of time or transferred to another license if &quot;mergers&quot; of licenses are allowed.
+      - If a forced transfer is triggered on the Geo Web, we have the new licensor reimburse the previous licensor and assume their fee balance
+    - Refundable deposits require additional accounting to be done so that the beneficiary of the PCO system doesn&#39;t overdraw from the treasury
+      - In a large asset registry, doing this with a time constant function is important (i.e., you don&#39;t want to iterate through ever license to recalculate the remaining deposit balance)
+        - Required Reserve(T1) = Reserve(T0) + New Deposits - Deposits Returned - Sum of Self-Assessed Values(T0) \* (Fee Rate \* Duration(T1-T0))
+        - Total Contract Funds(T1) - Required Reserve(T1) = Funds Available to Withdraw(T1)
+  - Streaming payments are likely the future of PCO assets. They offer more capital efficiency for the licensor, potentially superior UX, and might simplify the logic required within the PCO NFT contracts.
+    - Logic for accounting for stream payments might set a threshold for how long a stream has to be &quot;dry&quot; before considering a PCO NFT expired rather than setting a fixed date.
+- Mint/claim mechanism
+  - At the initiation, there are no licensors of the PCO NFTs, so a separate mechanism should be included to mint or claim new NFTs
+    - On the Geo Web, we are going to use a reverse Dutch auction to avoid a gas war or FCFS race in the initial allocation of NFTs
+    - An unlimited number of mechanisms could be implemented to govern the minting mechanism from free to fixed rate to variable claims.
+- Forced Transfer
+  - At a high level, all PCO NFTs must include a mechanism for changing the address that controls the license
+    - Under non-foreclosure conditions, the transaction should include a payment from the new licensor to the previous licensor equal to the previous licensor&#39;s Self-Assessed Value and reimbursement of outstanding fee deposits (if applicable)
+    - The new licensor should be able to set a new Self-Assessed Value in the same transaction and establish a new payment stream/add to the PCO fee deposit
+  - The most simple implementation assumes a continuous auction and instant transfer of the license, but additional logic could be implemented to create periodic (i.e., monthly auctions/transfers).
+  - Bid matching, clawbacks, and other protections could also be layered onto the forced transfer function to favor incumbent licensors
+- Foreclosure
+  - Upon failure to make the fee payments required by the partial common ownership market, the PCO NFT must be put into foreclosure/repossession.
+    - In a deposit &amp; expiration-based accounting model, this occurs when the NFT&#39;s expiration date is passed
+    - In a streaming model, this would be some time after a stream runs dry
+  - Logic of foreclosure should be left up to the implementation, but generally speaking there should be mechanisms for other market participants to assume control of the license through a market transaction for less than the previous Self-Assessed Value.
+    - On the Geo Web after an expiration date passes, the parcel is put into a straight-line reverse Dutch auction with the starting price equal to the Self-Assessed Value and the final price equal to 0
+      - If a parcel is claimed in auction, the auction proceeds are given to the previous licensor and the license is transferred to the new address.
+        - This is designed to be less penal for accidental lapses, but could be designed with a more hard line approach.
+        - Because the license by definition has no outstanding fee deposit, the new licensor must make a network fee deposit
+    - If a PCO NFT isn&#39;t claimed after expiration by another market participant, &quot;liquidation incentives&quot; could be designed (using PCO fees) for any blockchain address to process a transaction that resets/burns/inactivates the foreclosed license.
+- Modifying, burning, merging, and splitting licenses
+  - Depending on the nature of the PCO asset, there may be a need to modify the metadata, burn, split, and/or merge licenses.
+    - In a metadata modification, the PCO market attributes of the license should stay the same.
+    - In a burn scenario, the license would be nullified and any non-refundable PCO fee deposits would be forfeited and recognized as &quot;earned revenue.&quot;
+    - In a split, new licenses will be created and the licensor should determine how any outstanding PCO fee deposits should be allocated.
+    - In a merge, all of the PCO deposit balances of the merged assets should be transferred to the surviving license
+      - If the PCO NFT is also a composable NFT (i.e., it owns other NFTs), those assets should also be transferred before licenses are deprecated/burned to avoid orphaning.
+  - On the Geo Web, land parcel shapes need to be modifiable so that they can evolve and/or match physical land changes. We plan to enable the following:
+    - Trim &amp; extend parcels (PCO license attributes stay the same)
+    - Merge parcels (PCO fee deposits move to the surviving license; burn other license(s))
+    - Split parcels (PCO fee deposits should be allocated without loss)
